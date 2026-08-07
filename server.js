@@ -1,117 +1,149 @@
 const express = require("express");
+const mongoose = require("mongoose");
+require("dotenv").config();
+
+const Task = require("./models/Task");
 
 const app = express();
-
 const PORT = 5000;
 
+// -----------------------------
+// Connect MongoDB
+// -----------------------------
+mongoose
+  .connect("mongodb://127.0.0.1:27017/taskdb")
+  .then(() => console.log("MongoDB Connected"))
+  .catch((err) => console.log(err));
+
+// -----------------------------
+// Middleware
+// -----------------------------
 app.use(express.json());
 
-app.use((req,res,next)=>{
+// Logging Middleware
+app.use((req, res, next) => {
+  console.log(`${req.method} ${req.url} - ${new Date().toISOString()}`);
+  next();
+});
 
-    console.log(`${req.method} ${req.url} - ${new Date().toISOString()}`);
+// ==============================
+// GET ALL TASKS
+// ==============================
+app.get("/tasks", async (req, res, next) => {
+  try {
+    const tasks = await Task.find();
 
-    next();
+    res.status(200).json(tasks);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ==============================
+// GET TASK BY ID
+// ==============================
+app.get("/tasks/:id", async (req, res, next) => {
+  try {
+    const task = await Task.findById(req.params.id);
+
+    if (!task) {
+      return res.status(404).json({
+        message: "Task not found",
+      });
+    }
+
+    res.status(200).json(task);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ==============================
+// CREATE TASK
+// ==============================
+app.post("/tasks", async (req, res, next) => {
+  try {
+    const task = await Task.create({
+      title: req.body.title,
+      description: req.body.description,
+      completed: req.body.completed,
+    });
+
+    res.status(201).json(task);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ==============================
+// UPDATE TASK
+// ==============================
+app.put("/tasks/:id", async (req, res, next) => {
+  try {
+    const task = await Task.findByIdAndUpdate(req.params.id, req.body, {
+      new: true,
+      runValidators: true,
+    });
+
+    if (!task) {
+      return res.status(404).json({
+        message: "Task not found",
+      });
+    }
+
+    res.status(200).json(task);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ==============================
+// DELETE TASK
+// ==============================
+app.delete("/tasks/:id", async (req, res, next) => {
+  try {
+    const task = await Task.findByIdAndDelete(req.params.id);
+
+    if (!task) {
+      return res.status(404).json({
+        message: "Task not found",
+      });
+    }
+
+    res.status(200).json({
+      message: "Task deleted successfully",
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ==============================
+// 404 Handler
+// ==============================
+app.use((req, res) => {
+  res.status(404).json({
+    error: "Route not found",
+  });
+});
+
+// ==============================
+// Global Error Handler
+// ==============================
+app.use((err, req, res, next) => {
+
+    console.error(err);
+
+    res.status(500).json({
+        error: err.message,
+        stack: err.stack
+    });
 
 });
 
-app.use((req,res)=>{
-
-res.status(404).json({
-
-error:"Route not found"
-
-});
-
-});
-
-let tasks=[];
-
-app.get("/tasks",(req,res)=>{
-
-res.status(200).json(tasks);
-
-});
-
-app.post("/tasks",(req,res)=>{
-
-const newTask={
-
-id:tasks.length+1,
-
-title:req.body.title,
-
-completed:false
-
-};
-
-tasks.push(newTask);
-
-res.status(201).json(newTask);
-
-});
-
-app.put("/tasks/:id",(req,res)=>{
-
-const id=parseInt(req.params.id);
-
-const task=tasks.find(t=>t.id===id);
-
-if(!task){
-
-return res.status(404).json({
-
-message:"Task not found"
-
-});
-
-}
-
-task.title=req.body.title;
-
-task.completed=req.body.completed;
-
-res.status(200).json(task);
-
-});
-
-app.delete("/tasks/:id",(req,res)=>{
-
-const id=parseInt(req.params.id);
-
-const index=tasks.findIndex(t=>t.id===id);
-
-if(index===-1){
-
-return res.status(404).json({
-
-message:"Task not found"
-
-});
-
-}
-
-tasks.splice(index,1);
-
-res.status(200).json({
-
-message:"Task deleted"
-
-});
-
-});
-
-app.use((err,req,res,next)=>{
-
-console.error(err.stack);
-
-res.status(500).json({
-
-error:"Something went wrong"
-
-});
-
-});
-
+// ==============================
+// Start Server
+// ==============================
 app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+  console.log(`Server running on port ${PORT}`);
 });
