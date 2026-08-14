@@ -1,3 +1,4 @@
+const cors = require("cors");
 const express = require("express");
 const mongoose = require("mongoose");
 require("dotenv").config();
@@ -11,7 +12,7 @@ const PORT = 5000;
 // Connect MongoDB
 // -----------------------------
 mongoose
-  .connect("mongodb://127.0.0.1:27017/taskdb")
+  .connect(process.env.MONGO_URI)
   .then(() => console.log("MongoDB Connected"))
   .catch((err) => console.log(err));
 
@@ -19,6 +20,7 @@ mongoose
 // Middleware
 // -----------------------------
 app.use(express.json());
+app.use(cors());
 
 // Logging Middleware
 app.use((req, res, next) => {
@@ -63,11 +65,12 @@ app.get("/tasks/:id", async (req, res, next) => {
 // ==============================
 app.post("/tasks", async (req, res, next) => {
   try {
-    const task = await Task.create({
-      title: req.body.title,
-      description: req.body.description,
-      completed: req.body.completed,
-    });
+const task = await Task.create({
+  title: req.body.title,
+  description: req.body.description,
+  completed: req.body.completed,
+  priority: req.body.priority,
+});
 
     res.status(201).json(task);
   } catch (err) {
