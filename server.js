@@ -1,7 +1,10 @@
 const cors = require("cors");
 const express = require("express");
 const mongoose = require("mongoose");
+
 require("dotenv").config();
+
+const cache = require("./cache");
 
 const Task = require("./models/Task");
 const User = require("./models/User");
@@ -168,31 +171,26 @@ app.get("/me", authMiddleware, async (req, res, next) => {
 // GET ALL TASKS
 // ==============================
 
-app.get("/tasks", authMiddleware, async (req, res, next) => {
-    try {
-        const tasks = await Task.find();
-
-        res.status(200).json(tasks);
-    } catch (err) {
-        next(err);
-    }
-});
-
 // ==============================
 // GET TASK BY ID
 // ==============================
 
-app.get("/tasks/:id", authMiddleware, async (req, res, next) => {
+app.get("/tasks", authMiddleware, async (req, res, next) => {
     try {
-        const task = await Task.findById(req.params.id);
+        const cachedTasks = cache.get("all_tasks");
 
-        if (!task) {
-            return res.status(404).json({
-                message: "Task not found",
-            });
+        if (cachedTasks) {
+            console.log("CACHE HIT");
+            return res.status(200).json(cachedTasks);
         }
 
-        res.status(200).json(task);
+        console.log("CACHE MISS");
+
+        const tasks = await Task.find();
+
+        cache.set("all_tasks", tasks);
+
+        res.status(200).json(tasks);
     } catch (err) {
         next(err);
     }
@@ -214,6 +212,8 @@ app.post(
                 completed: req.body.completed,
                 priority: req.body.priority,
             });
+
+            cache.del("all_tasks");
 
             res.status(201).json(task);
         } catch (err) {
@@ -243,6 +243,8 @@ app.put("/tasks/:id", authMiddleware, async (req, res, next) => {
             });
         }
 
+        cache.del("all_tasks");
+
         res.status(200).json(task);
     } catch (err) {
         next(err);
@@ -262,6 +264,8 @@ app.delete("/tasks/:id", authMiddleware, async (req, res, next) => {
                 message: "Task not found",
             });
         }
+
+        cache.del("all_tasks");
 
         res.status(200).json({
             message: "Task deleted successfully",
