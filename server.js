@@ -1,3 +1,4 @@
+
 const cors = require("cors");
 const express = require("express");
 const mongoose = require("mongoose");
@@ -5,6 +6,8 @@ const mongoose = require("mongoose");
 require("dotenv").config();
 
 const cache = require("./cache");
+const taskEvents = require("./events");
+require("./listeners");
 
 const Task = require("./models/Task");
 const User = require("./models/User");
@@ -49,14 +52,12 @@ app.post("/register", async (req, res, next) => {
     try {
         const { email, password } = req.body;
 
-        // Validate input
         if (!email || !password) {
             return res.status(400).json({
                 message: "Email and password are required",
             });
         }
 
-        // Check if user already exists
         const existingUser = await User.findOne({ email });
 
         if (existingUser) {
@@ -65,10 +66,8 @@ app.post("/register", async (req, res, next) => {
             });
         }
 
-        // Hash password
         const hashedPassword = await bcrypt.hash(password, 10);
 
-        // Create user
         const user = await User.create({
             email,
             password: hashedPassword,
@@ -94,14 +93,12 @@ app.post("/login", async (req, res, next) => {
     try {
         const { email, password } = req.body;
 
-        // Validate input
         if (!email || !password) {
             return res.status(400).json({
                 message: "Email and password are required",
             });
         }
 
-        // Find user
         const user = await User.findOne({ email });
 
         if (!user) {
@@ -110,7 +107,6 @@ app.post("/login", async (req, res, next) => {
             });
         }
 
-        // Compare password with hashed password
         const isMatch = await bcrypt.compare(
             password,
             user.password
@@ -122,7 +118,6 @@ app.post("/login", async (req, res, next) => {
             });
         }
 
-        // Generate JWT
         const token = jwt.sign(
             {
                 id: user._id,
@@ -168,11 +163,7 @@ app.get("/me", authMiddleware, async (req, res, next) => {
 });
 
 // ==============================
-// GET ALL TASKS
-// ==============================
-
-// ==============================
-// GET TASK BY ID
+// GET ALL TASKS - WITH CACHING
 // ==============================
 
 app.get("/tasks", authMiddleware, async (req, res, next) => {
@@ -197,7 +188,7 @@ app.get("/tasks", authMiddleware, async (req, res, next) => {
 });
 
 // ==============================
-// CREATE TASK
+// CREATE TASK - PRACTICAL 10
 // ==============================
 
 app.post(
@@ -213,9 +204,26 @@ app.post(
                 priority: req.body.priority,
             });
 
+            // Practical 9: invalidate cache
             cache.del("all_tasks");
 
+            // Prepare notification information
+            const notificationData = {
+                task: task.toObject(),
+                assignedUser: req.user.email || req.user.id,
+                createdAt: new Date().toISOString(),
+            };
+
+            // Log API response timestamp
+            console.log(
+                `[API] Response sent at ${new Date().toISOString()}`
+            );
+
+            // Send response immediately
             res.status(201).json(task);
+
+            // Emit event for background notification
+            taskEvents.emit("task-created", notificationData);
         } catch (err) {
             next(err);
         }
@@ -243,6 +251,7 @@ app.put("/tasks/:id", authMiddleware, async (req, res, next) => {
             });
         }
 
+        // Practical 9: invalidate cache
         cache.del("all_tasks");
 
         res.status(200).json(task);
@@ -252,7 +261,7 @@ app.put("/tasks/:id", authMiddleware, async (req, res, next) => {
 });
 
 // ==============================
-// DELETE TASK
+// DELETE TASK - PRACTICAL 10
 // ==============================
 
 app.delete("/tasks/:id", authMiddleware, async (req, res, next) => {
@@ -265,10 +274,21 @@ app.delete("/tasks/:id", authMiddleware, async (req, res, next) => {
             });
         }
 
+        // Practical 9: invalidate cache
         cache.del("all_tasks");
+
+        console.log(
+            `[API] Delete response sent at ${new Date().toISOString()}`
+        );
 
         res.status(200).json({
             message: "Task deleted successfully",
+        });
+
+        // Emit deletion notification
+        taskEvents.emit("task-deleted", {
+            title: task.title,
+            deletedAt: new Date().toISOString(),
         });
     } catch (err) {
         next(err);
@@ -291,6 +311,10 @@ app.use((req, res) => {
 
 app.use((err, req, res, next) => {
     console.error(err);
+
+    if (res.headersSent) {
+        return next(err);
+    }
 
     res.status(500).json({
         error: err.message,
