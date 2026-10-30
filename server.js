@@ -18,14 +18,14 @@ const authMiddleware = require("./middleware/authMiddleware");
 const validateTask = require("./middleware/validationMiddleware");
 
 const app = express();
-const PORT = 5000;
+const PORT = process.env.PORT || 5000;
 
 // ==============================
 // CONNECT MONGODB
 // ==============================
 
 mongoose
-    .connect(process.env.MONGO_URI)
+    .connect(process.env.MONGO_URI || "mongodb://mongodb:27017/taskdb")
     .then(() => console.log("MongoDB Connected"))
     .catch((err) => console.log(err));
 
