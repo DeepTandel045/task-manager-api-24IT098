@@ -18,11 +18,10 @@ describe("Task Management API Automated CI Tests", () => {
         cache.close();
     });
 
-    // Deliberate test failure for CI demonstration (Practical Step 5)
-    // Expecting 500 when GET /tasks returns 200 OK
+    // Practical Step 2: Test GET /tasks endpoint returns status 200
     test("GET /tasks returns 200", async () => {
         const res = await request(app).get("/tasks");
-        expect(res.statusCode).toBe(500); // DELIBERATE FAILURE: expected 500, received 200
+        expect(res.statusCode).toBe(200);
         expect(Array.isArray(res.body)).toBe(true);
     });
 
