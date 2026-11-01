@@ -23,7 +23,7 @@ const PORT = process.env.PORT || 5000;
 // CONNECT MONGODB
 // ==============================
 
-if (process.env.NODE_ENV !== "test") {
+if (process.env.NODE_ENV !== "test" && require.main === module) {
     mongoose
         .connect(process.env.MONGO_URI || "mongodb://mongodb:27017/taskdb")
         .then(() => console.log("MongoDB Connected"))
@@ -62,25 +62,29 @@ app.get("/", (req, res) => {
 
 app.post("/register", async (req, res, next) => {
     try {
-        const { email, password } = req.body;
+        const { username, email, password } = req.body;
 
-        if (!email || !password) {
+        if (!username || !email || !password) {
             return res.status(400).json({
-                message: "Email and password are required",
+                message: "Username, email and password are required",
             });
         }
 
-        const existingUser = await User.findOne({ email });
+        const existingUser = await User.findOne({
+            $or: [{ email }, { username }],
+        });
 
         if (existingUser) {
-            return res.status(409).json({
-                message: "User already exists",
+            return res.status(400).json({
+                message: "User already exists with that email or username",
             });
         }
 
-        const hashedPassword = await bcrypt.hash(password, 10);
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash(password, salt);
 
-        const user = await User.create({
+        const newUser = await User.create({
+            username,
             email,
             password: hashedPassword,
         });
@@ -88,8 +92,9 @@ app.post("/register", async (req, res, next) => {
         res.status(201).json({
             message: "User registered successfully",
             user: {
-                id: user._id,
-                email: user.email,
+                id: newUser._id,
+                username: newUser.username,
+                email: newUser.email,
             },
         });
     } catch (err) {
@@ -114,19 +119,16 @@ app.post("/login", async (req, res, next) => {
         const user = await User.findOne({ email });
 
         if (!user) {
-            return res.status(401).json({
-                message: "Invalid email or password",
+            return res.status(400).json({
+                message: "Invalid credentials",
             });
         }
 
-        const isMatch = await bcrypt.compare(
-            password,
-            user.password
-        );
+        const isMatch = await bcrypt.compare(password, user.password);
 
         if (!isMatch) {
-            return res.status(401).json({
-                message: "Invalid email or password",
+            return res.status(400).json({
+                message: "Invalid credentials",
             });
         }
 
@@ -219,23 +221,14 @@ app.post(
             // Practical 9: invalidate cache
             cache.del("all_tasks");
 
-            // Prepare notification information
-            const notificationData = {
-                task: task.toObject(),
-                assignedUser: req.user.email || req.user.id,
+            // Practical 10: emit background event
+            taskEvents.emit("task-created", {
+                task: task,
+                assignedUser: req.user.email,
                 createdAt: new Date().toISOString(),
-            };
+            });
 
-            // Log API response timestamp
-            console.log(
-                `[API] Response sent at ${new Date().toISOString()}`
-            );
-
-            // Send response immediately
             res.status(201).json(task);
-
-            // Emit event for background notification
-            taskEvents.emit("task-created", notificationData);
         } catch (err) {
             next(err);
         }
@@ -246,34 +239,39 @@ app.post(
 // UPDATE TASK
 // ==============================
 
-app.put("/tasks/:id", authMiddleware, async (req, res, next) => {
-    try {
-        const task = await Task.findByIdAndUpdate(
-            req.params.id,
-            req.body,
-            {
-                new: true,
-                runValidators: true,
+app.put(
+    "/tasks/:id",
+    authMiddleware,
+    validateTask,
+    async (req, res, next) => {
+        try {
+            const task = await Task.findByIdAndUpdate(
+                req.params.id,
+                req.body,
+                {
+                    new: true,
+                    runValidators: true,
+                }
+            );
+
+            if (!task) {
+                return res.status(404).json({
+                    message: "Task not found",
+                });
             }
-        );
 
-        if (!task) {
-            return res.status(404).json({
-                message: "Task not found",
-            });
+            // Invalidate cache
+            cache.del("all_tasks");
+
+            res.status(200).json(task);
+        } catch (err) {
+            next(err);
         }
-
-        // Practical 9: invalidate cache
-        cache.del("all_tasks");
-
-        res.status(200).json(task);
-    } catch (err) {
-        next(err);
     }
-});
+);
 
 // ==============================
-// DELETE TASK - PRACTICAL 10
+// DELETE TASK
 // ==============================
 
 app.delete("/tasks/:id", authMiddleware, async (req, res, next) => {
@@ -286,21 +284,17 @@ app.delete("/tasks/:id", authMiddleware, async (req, res, next) => {
             });
         }
 
-        // Practical 9: invalidate cache
+        // Invalidate cache
         cache.del("all_tasks");
 
-        console.log(
-            `[API] Delete response sent at ${new Date().toISOString()}`
-        );
+        // Emit background event
+        taskEvents.emit("task-deleted", {
+            taskId: req.params.id,
+            title: task.title,
+        });
 
         res.status(200).json({
             message: "Task deleted successfully",
-        });
-
-        // Emit deletion notification
-        taskEvents.emit("task-deleted", {
-            title: task.title,
-            deletedAt: new Date().toISOString(),
         });
     } catch (err) {
         next(err);
@@ -313,7 +307,7 @@ app.delete("/tasks/:id", authMiddleware, async (req, res, next) => {
 
 app.use((req, res) => {
     res.status(404).json({
-        error: "Route not found",
+        message: "Route not found",
     });
 });
 
@@ -337,7 +331,7 @@ app.use((err, req, res, next) => {
 // START SERVER
 // ==============================
 
-if (process.env.NODE_ENV !== "test") {
+if (process.env.NODE_ENV !== "test" && require.main === module) {
     app.listen(PORT, () => {
         console.log(`Server running on port ${PORT}`);
     });
