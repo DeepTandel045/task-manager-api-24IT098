@@ -24,6 +24,11 @@ jobs:
         run: npm install
 
       - name: Run Automated Tests
-        env:
-          NODE_ENV: test
-        run: npm test
+        run: |
+          npm test || {
+            echo "### Jest Output on Failure:" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            npm test >> $GITHUB_STEP_SUMMARY 2>&1 || true
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            exit 1
+          }
