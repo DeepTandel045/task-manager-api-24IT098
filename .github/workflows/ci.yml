@@ -24,9 +24,4 @@ jobs:
         run: npm install
 
       - name: Run Automated Tests
-        run: |
-          npx jest --forceExit || {
-            ERR=$(npx jest --forceExit 2>&1 | tr '\n' ' ' | head -c 1000)
-            echo "::error title=TestFailure::$ERR"
-            exit 1
-          }
+        run: npm test

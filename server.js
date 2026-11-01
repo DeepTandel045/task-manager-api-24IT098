@@ -8,7 +8,7 @@ const cache = require("./cache");
 const taskEvents = require("./events");
 require("./listeners");
 
-const Task = require("./models/Task");
+const Task = require("./models/task");
 const User = require("./models/User");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");

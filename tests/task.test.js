@@ -2,11 +2,11 @@ process.env.NODE_ENV = "test";
 
 const request = require("supertest");
 const app = require("../server");
-const Task = require("../models/Task");
+const Task = require("../models/task");
 const cache = require("../cache");
 
 // Mock Task model find method so tests run isolated from MongoDB in CI
-jest.mock("../models/Task", () => ({
+jest.mock("../models/task", () => ({
     find: jest.fn().mockResolvedValue([
         { _id: "67246b1001", title: "Test Task 1", completed: false },
         { _id: "67246b1002", title: "Test Task 2", completed: true },
@@ -18,10 +18,11 @@ describe("Task Management API Automated CI Tests", () => {
         cache.close();
     });
 
-    // Practical Step 2: Test GET /tasks endpoint returns status 200
+    // Deliberate test failure for CI demonstration (Practical Step 5)
+    // Expecting 500 when GET /tasks returns 200 OK
     test("GET /tasks returns 200", async () => {
         const res = await request(app).get("/tasks");
-        expect(res.statusCode).toBe(200);
+        expect(res.statusCode).toBe(500); // DELIBERATE FAILURE: expected 500, received 200
         expect(Array.isArray(res.body)).toBe(true);
     });
 
