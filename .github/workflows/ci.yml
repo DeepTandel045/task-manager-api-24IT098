@@ -25,10 +25,8 @@ jobs:
 
       - name: Run Automated Tests
         run: |
-          npm test || {
-            echo "### Jest Output on Failure:" >> $GITHUB_STEP_SUMMARY
-            echo '```' >> $GITHUB_STEP_SUMMARY
-            npm test >> $GITHUB_STEP_SUMMARY 2>&1 || true
-            echo '```' >> $GITHUB_STEP_SUMMARY
+          npx jest --forceExit || {
+            ERR=$(npx jest --forceExit 2>&1 | tr '\n' ' ' | head -c 1000)
+            echo "::error title=TestFailure::$ERR"
             exit 1
           }
