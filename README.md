@@ -2,9 +2,11 @@
 
 [![CI Pipeline](https://github.com/DeepTandel045/task-manager-api-24IT098/actions/workflows/ci.yml/badge.svg)](https://github.com/DeepTandel045/task-manager-api-24IT098/actions/workflows/ci.yml)
 
-**Course:** Advanced Web Development (AWD)  
+**Course:** Advanced Web Development Frameworks (ITUE301)  
+**Semester:** 5th  
 **Student ID:** 24IT098  
-**Practical 12:** CI/CD Pipeline Automation with GitHub Actions  
+**Student Name:** Deep Tandel  
+**Practical 12:** Automate testing and deployment of the application using a CI/CD pipeline  
 **CO/PO Mapping:** CO5 / PO3, PO5  
 
 ---
@@ -14,31 +16,31 @@ To automate testing and validation of the Task Management backend application us
 
 ---
 
-## 2. CI/CD Architecture & Workflow
+## 2. CI/CD Architecture & Pipeline Workflow
 
 ```text
-Developer Push (git push origin main)
+git push origin main / pull_request targeting main
          │
          ▼
-GitHub Actions Trigger (on: push, on: pull_request to main)
+GitHub Actions Trigger (on: push, on: pull_request)
          │
          ▼
-Job: build-and-test (ubuntu-latest)
+Job: build-and-test (runs-on: ubuntu-latest)
   ├── 1. Checkout Code (actions/checkout@v4)
-  ├── 2. Setup Node.js v18 (actions/setup-node@v4)
-  ├── 3. Install Dependencies (npm install)
-  ├── 4. Run Automated Tests (npm test -> Jest & Supertest)
-  └── 5. Pass / Fail Status Reporting
+  ├── 2. Setup Node.js v20 (actions/setup-node@v4)
+  ├── 3. Install Dependencies (run: npm install)
+  ├── 4. Run Automated Tests (run: npm test -> Jest & Supertest)
+  └── 5. Report Pass / Fail Status
          │
          ▼
-Result Status:
-  ✅ Green Checkmark (Build & Tests Passed)
-  ❌ Red Cross (Build or Test Failed)
+Pipeline Result:
+  ✅ Green Checkmark (All tests passed -> Exit code 0)
+  ❌ Red X Cross (Test assertion failed or build error -> Exit code 1)
 ```
 
 ---
 
-## 3. Workflow Configuration (`.github/workflows/ci.yml`)
+## 3. GitHub Actions Workflow Configuration (`.github/workflows/ci.yml`)
 
 ```yaml
 name: CI Pipeline
@@ -60,7 +62,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 18
+          node-version: 20
           cache: 'npm'
 
       - name: Install Dependencies
@@ -72,58 +74,168 @@ jobs:
 
 ---
 
-## 4. Automated Tests (`tests/task.test.js`)
+## 4. Automated Test Suite (`tests/task.test.js`)
 
-The test suite uses **Jest** and **Supertest** to test API endpoints:
+The test suite utilizes **Jest** and **Supertest** to execute automated integration tests against the Express API endpoints without requiring external database dependencies during CI:
 
-1. **Test 1: `GET /tasks`**
-   - Asserts response HTTP status is `200 OK`.
-   - Asserts returned payload is an array of tasks.
-2. **Test 2: `GET /` (Health / Root Endpoint)**
-   - Asserts response HTTP status is `200 OK`.
-   - Asserts healthy status message (`status: "success"`).
+```javascript
+process.env.NODE_ENV = "test";
+
+const request = require("supertest");
+const app = require("../server");
+const Task = require("../models/task");
+const cache = require("../cache");
+
+// Mock Task model find method so tests run isolated from MongoDB in CI
+jest.mock("../models/task", () => ({
+    find: jest.fn().mockResolvedValue([
+        { _id: "67246b1001", title: "Test Task 1", completed: false },
+        { _id: "67246b1002", title: "Test Task 2", completed: true },
+    ]),
+}));
+
+describe("Task Management API Automated CI Tests", () => {
+    afterAll(() => {
+        cache.close();
+    });
+
+    // Practical Step 2: Test GET /tasks endpoint returns status 200
+    test("GET /tasks returns 200", async () => {
+        const res = await request(app).get("/tasks");
+        expect(res.statusCode).toBe(200);
+        expect(Array.isArray(res.body)).toBe(true);
+    });
+
+    // Post-lab Requirement: Second automated test covering a different endpoint
+    test("GET / returns 200 and healthy status message", async () => {
+        const res = await request(app).get("/");
+        expect(res.statusCode).toBe(200);
+        expect(res.body.status).toBe("success");
+    });
+});
+```
 
 ---
 
 ## 5. Deliberate Failure & Recovery Demonstration
 
 ### A. Failing Pipeline Run (Deliberate Test Failure)
-- **Action:** Altered expected status code in `tests/task.test.js` from `200` to `500`:
+- **Commit:** `111ad13` - *Practical 12: Demonstrate pipeline failure with deliberately broken test*
+- **Workflow Run ID:** `41310080583`
+- **Workflow Run URL:** [View Failed Run](https://github.com/DeepTandel045/task-manager-api-24IT098/actions/runs/41310080583)
+- **Deliberate Change:** Changed expected status code in `tests/task.test.js` from `200` to `500`:
   ```javascript
   expect(res.statusCode).toBe(500); // Expected 500, received 200
   ```
-- **Result:** GitHub Actions detected the mismatch and exited with code 1.
-- **Status:** ❌ Failed (Red X)
+- **Pipeline Result:** ❌ **FAILED (Red X)**
+- **Console Log Output:**
+  ```text
+  FAIL tests/task.test.js
+    ● Task Management API Automated CI Tests › GET /tasks returns 200
+      expect(received).toBe(expected) // Object.is equality
+      Expected: 500
+      Received: 200
+      Tests: 1 failed, 1 passed, 2 total
+      Process completed with exit code 1.
+  ```
 
 ### B. Passing Pipeline Run (Fixed Test)
-- **Action:** Restored the test assertion to expect `200`:
-  ```javascript
-  expect(res.statusCode).toBe(200);
+- **Commit:** `e8cc350` - *Fix deliberate test failure - all CI automated tests passing*
+- **Workflow Run ID:** `41310191964`
+- **Workflow Run URL:** [View Passing Run](https://github.com/DeepTandel045/task-manager-api-24IT098/actions/runs/41310191964)
+- **Fix Applied:** Restored assertion to `expect(res.statusCode).toBe(200);`
+- **Pipeline Result:** ✅ **PASSED (Green Checkmark)**
+- **Console Log Output:**
+  ```text
+  PASS tests/task.test.js
+    Task Management API Automated CI Tests
+      √ GET /tasks returns 200 (37 ms)
+      √ GET / returns 200 and healthy status message (6 ms)
+  Test Suites: 1 passed, 1 total
+  Tests:       2 passed, 2 total
+  Snapshots:   0 total
   ```
-- **Result:** Jest tests passed cleanly (2 passed, 2 total).
-- **Status:** ✅ Passed (Green checkmark)
 
 ---
 
 ## 6. Key Analysis & Viva Questions
 
-### Q1: What is the difference between Continuous Integration (CI) and Continuous Deployment (CD), and which one does this practical demonstrate?
-- **Continuous Integration (CI):** The practice of automating the integration of code changes from multiple contributors into a single repository frequently. Every commit automatically triggers automated builds, dependency installation, and test suites to verify that the changes do not break the codebase.
-- **Continuous Deployment (CD):** The automated process where code changes that pass all CI stages are automatically deployed directly to production/staging servers without human intervention.
-- **This Practical:** Specifically demonstrates **Continuous Integration (CI)**, where automated dependency installation and Jest unit/integration tests run automatically upon pushing code to GitHub.
+### Q1: What is the difference between Continuous Integration (CI) and Continuous Deployment (CD), and which one does this practical actually demonstrate?
+- **Continuous Integration (CI):** The practice of automating the integration and verification of code changes from multiple developers into a central repository. Every commit automatically triggers dependency installation, compilation/linting, and automated tests to catch regressions early.
+- **Continuous Deployment (CD):** The automated stage that directly follows CI, where changes passing all automated tests are automatically built into deployable artifacts (such as Docker images) and released into staging or production server environments without manual intervention.
+- **This Practical Demonstration:** This practical specifically demonstrates **Continuous Integration (CI)** by validating repository changes, managing dependencies, and executing automated Jest/Supertest suites on GitHub Actions runners upon `git push`.
 
 ### Q2: Why does running tests automatically on every push catch problems earlier than testing manually before a release?
-Running automated tests on each `git push` ensures that regressions and bugs are detected immediately when the context is fresh in the developer's mind (often termed "shift-left testing"). Testing manually before release batches weeks of changes together, making root cause identification slow, difficult, and prone to human oversight.
+1. **Immediate Feedback Loop ("Shift-Left Testing"):** Developers are notified of regressions within minutes of writing the code while the mental context of the implementation is still fresh.
+2. **Isolation of Causes:** Because tests run on small, discrete commits, identifying which specific line of code broke a test is trivial compared to diagnosing a bug across a batched multi-week release.
+3. **Consistency:** Automated pipelines eliminate human error, forgotten test cases, and environment-specific quirks ("it works on my machine").
 
 ### Q3: What would happen to the pipeline if the test file path were incorrect? Would the workflow fail at the same step as a genuine test failure?
-If the test file path is incorrect or missing, Jest will fail during the test execution phase with "No tests found" (exiting with code 1 by default), failing at the same step (`run: npm test`). However, the log output would explicitly state `No tests found` rather than an assertion failure (such as `expect(received).toBe(expected)`), clearly distinguishing configuration errors from functional regressions.
+- If the test file path is incorrect or the referenced module path has a casing mismatch (e.g., `Task` vs `task` on case-sensitive Linux runners), the workflow still fails at the test execution step (`Run Automated Tests`).
+- **Difference in Diagnostics:**
+  - A **genuine test failure** displays an assertion mismatch (e.g., `Expected: 500`, `Received: 200`).
+  - A **path or import failure** throws an uncaught module resolution error (`Cannot find module ...` or `No tests found`), failing before any test assertions can execute.
 
 ---
 
-## 7. Local Execution
+## 7. Supplementary Problems
 
-To run the tests locally:
+### 1. Adding a Linting Job (ESLint) Before Tests
+In `.github/workflows/ci.yml`, a separate linting job can be configured, and `build-and-test` can depend on it via `needs: lint`:
+```yaml
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install
+      - run: npx eslint .
+
+  build-and-test:
+    needs: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install
+      - run: npm test
+```
+
+### 2. PR-Only Trigger Configuration
+To configure the workflow to run exclusively on pull requests targeting `main` (and not on direct pushes):
+```yaml
+on:
+  pull_request:
+    branches: [main]
+```
+
+### 3. README Status Badge
+Added at the top of this README:
+```markdown
+[![CI Pipeline](https://github.com/DeepTandel045/task-manager-api-24IT098/actions/workflows/ci.yml/badge.svg)](https://github.com/DeepTandel045/task-manager-api-24IT098/actions/workflows/ci.yml)
+```
+
+---
+
+## 8. Local Execution Commands
+
 ```bash
+# Install dependencies
 npm install
+
+# Run automated tests
 npm test
 ```
+
+---
+
+## 9. Deliverables & Repository Links
+
+- **Repository:** [https://github.com/DeepTandel045/task-manager-api-24IT098](https://github.com/DeepTandel045/task-manager-api-24IT098)
+- **Workflow File:** [`.github/workflows/ci.yml`](https://github.com/DeepTandel045/task-manager-api-24IT098/blob/main/.github/workflows/ci.yml)
+- **Test Suite:** [`tests/task.test.js`](https://github.com/DeepTandel045/task-manager-api-24IT098/blob/main/tests/task.test.js)
