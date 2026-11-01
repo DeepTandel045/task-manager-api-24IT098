@@ -1,4 +1,3 @@
-
 const cors = require("cors");
 const express = require("express");
 const mongoose = require("mongoose");
@@ -24,10 +23,12 @@ const PORT = process.env.PORT || 5000;
 // CONNECT MONGODB
 // ==============================
 
-mongoose
-    .connect(process.env.MONGO_URI || "mongodb://mongodb:27017/taskdb")
-    .then(() => console.log("MongoDB Connected"))
-    .catch((err) => console.log(err));
+if (process.env.NODE_ENV !== "test") {
+    mongoose
+        .connect(process.env.MONGO_URI || "mongodb://mongodb:27017/taskdb")
+        .then(() => console.log("MongoDB Connected"))
+        .catch((err) => console.log(err));
+}
 
 // ==============================
 // MIDDLEWARE
@@ -42,6 +43,17 @@ app.use((req, res, next) => {
         `${req.method} ${req.url} - ${new Date().toISOString()}`
     );
     next();
+});
+
+// ==============================
+// ROOT / HEALTH CHECK ROUTE
+// ==============================
+
+app.get("/", (req, res) => {
+    res.status(200).json({
+        status: "success",
+        message: "Task Manager API is running smoothly",
+    });
 });
 
 // ==============================
@@ -123,7 +135,7 @@ app.post("/login", async (req, res, next) => {
                 id: user._id,
                 email: user.email,
             },
-            process.env.JWT_SECRET,
+            process.env.JWT_SECRET || "default_jwt_secret",
             {
                 expiresIn: "1h",
             }
@@ -325,6 +337,10 @@ app.use((err, req, res, next) => {
 // START SERVER
 // ==============================
 
-app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-});
+if (process.env.NODE_ENV !== "test") {
+    app.listen(PORT, () => {
+        console.log(`Server running on port ${PORT}`);
+    });
+}
+
+module.exports = app;
