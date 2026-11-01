@@ -31,4 +31,16 @@ describe("Task Management API Automated CI Tests", () => {
         expect(res.statusCode).toBe(200);
         expect(res.body.status).toBe("success");
     });
+
+    // Practical 13: Test AI Description Generation Route with graceful degradation
+    test("POST /api/ai/generate-description returns generated description and disclaimer", async () => {
+        const res = await request(app)
+            .post("/api/ai/generate-description")
+            .send({ title: "Fix login authentication bug" });
+
+        expect(res.statusCode).toBe(200);
+        expect(res.body).toHaveProperty("description");
+        expect(res.body).toHaveProperty("disclaimer");
+        expect(res.body.description.length).toBeGreaterThan(0);
+    });
 });
